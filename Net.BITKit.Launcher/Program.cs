@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Net.BITKit.Launcher;
 using Spectre.Console;
 using YamlDotNet.Serialization;
@@ -116,13 +118,33 @@ async Task GenerateManifest(string root)
             }
         });
 
-  
+
+    var outputPath = Path.Combine(root, "manifest.yaml");
+    //计算现有的mainfest,集成baseUrl和Name
+
+    if (File.Exists(outputPath))
+    {
+        try
+        {
+            var existManifest = deserializer.Deserialize<Manifest>(await File.ReadAllTextAsync(outputPath));
+            
+            manifest.BaseUrl = existManifest.BaseUrl;
+            manifest.Name = existManifest.Name;
+            manifest.Launcher = existManifest.Launcher;
+        }
+        catch (Exception e)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"反序列化现有清单错误:\n{e}");
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+    }
 
     var yaml = serializer.Serialize(manifest);
 
     deserializer.Deserialize<Manifest>(yaml);
 
-    await File.WriteAllTextAsync(Path.Combine(root, "manifest.yaml"), yaml);
+    await File.WriteAllTextAsync(outputPath, yaml);
 }
 
 static async Task<string> CalcHash(string file)
@@ -180,11 +202,28 @@ async Task DownloadManifestFilesAsync(int maxConcurrency = 4)
     {
         throw new Exception($"清单文件中没有文件信息，请检查 manifest.yaml 文件。\n{yaml}");
     }
+
+
+    try
+    {
+        await AnsiConsole.Progress()
+            .StartAsync(Download);
     
-    await AnsiConsole.Progress()
-        .StartAsync(Download);
-    
-    Console.WriteLine("所有文件下载完成.");
+        Console.WriteLine("所有文件下载完成.");
+    }
+    catch (Exception e)
+    {
+        Console.WriteLine("更新错误,按任意键退出");
+        
+        Console.WriteLine(e);
+
+        Console.ReadKey();        
+        #if DEBUG
+        throw;
+        #endif
+        return;
+    }
+  
 
     if (manifest.Launcher is { Length: > 0 })
     {
@@ -215,10 +254,14 @@ async Task DownloadManifestFilesAsync(int maxConcurrency = 4)
     {
         var buffer = new byte[81920]; // 80 KB
         
+        string exeName = Path.GetFileName(Process.GetCurrentProcess().MainModule!.FileName);
+        
         var totalSize = files.Sum(f => f.Size);
         long currentSize = 0;
         
         var fileTask = ctx.AddTask("[yellow]下载文件...[/]", maxValue: files.Count, autoStart: false);
+
+        var consecutiveError = 0;
 
         for (var i = 0; i < files.Count; i++)
         {
@@ -243,40 +286,75 @@ async Task DownloadManifestFilesAsync(int maxConcurrency = 4)
                         continue;
                     }
                 }
+                
+            
+                {  
+                    await using var resp = await client.GetStreamAsync(url);
+                    var totalBytesRead = 0L;
 
+                    int bytesRead;
+
+                    var path = localPath;
+
+                    var isLauncher = f.Path.Equals(exeName, StringComparison.OrdinalIgnoreCase);
+                    
+                    if (isLauncher)
                     {
-                        await using var resp = await client.GetStreamAsync(url);
-                        var totalBytesRead = 0L;
-                  
-                        int bytesRead;
-
-                        await using var fs = File.Open(localPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                        t.Description = "[green]暂未支持启动器自更新,保存到.new[/]";
                         
-                        
-                        while ((bytesRead = await resp.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                        {
-                            await fs.WriteAsync(buffer, 0, bytesRead);
-                            totalBytesRead += bytesRead;
-
-                            t.Description($"{f.Path}@{totalBytesRead / 1024}KB");
-                            await Task.Yield();
-                        }
+                        path = Path.GetFileNameWithoutExtension(localPath) + ".new" + Path.GetExtension(localPath);
                     }
 
-                    if(f.Path.Equals("manifest.yaml",StringComparison.OrdinalIgnoreCase) is false)
+                    await using var fs = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                    while ((bytesRead = await resp.ReadAsync(buffer)) > 0)
                     {
-                        // 校验 Hash
-                        using var md5 = MD5.Create();
-                        await using var fs2 = File.OpenRead(localPath);
-                        var hash = Convert.ToHexString(await md5.ComputeHashAsync(fs2));
-                        if (!hash.Equals(f.Hash, StringComparison.OrdinalIgnoreCase))
-                        {
-                            t.Description($"[yellow]下载可能损坏: {f.Path}[/]");
-                            continue;
-                        }
+                        await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
+                        totalBytesRead += bytesRead;
+
+                        t.Description($"{f.Path}@{totalBytesRead / 1024}KB");
+                        t.Value = ((double)totalBytesRead / f.Size);
                     }
 
-                    currentSize += f.Size;
+                    if (isLauncher)
+                    {
+                        DownloadSucceed();
+                        continue;
+                    }
+                }
+
+                //检测路径是否是本exe路径
+                
+
+                if (f.Path.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase))
+                {
+                    t.Description = "[green]已更新资源清单[/]";
+                }
+                else
+                {
+                    // 校验 Hash
+                    using var md5 = MD5.Create();
+                    await using var fs2 = File.OpenRead(localPath);
+                    var hash = Convert.ToHexString(await md5.ComputeHashAsync(fs2));
+                    if (!hash.Equals(f.Hash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        t.Description($"[yellow]下载可能损坏: {f.Path}[/]");
+                        continue;
+                    }
+                }
+
+                DownloadSucceed();
+            }
+            catch (Exception e)
+            {
+                consecutiveError++;
+
+                t.Description = $"[red]错误:[/]:{e.Message}";
+
+                if (consecutiveError >= 3)
+                {
+                    throw new ExternalException($"连续 {consecutiveError} 个文件下载失败，终止更新。", e);
+                }
             }
             finally
             {
@@ -286,6 +364,15 @@ async Task DownloadManifestFilesAsync(int maxConcurrency = 4)
 
                 fileTask.Description = $"下载中::{i+1}/{files.Count} 已下载:({currentSize/1024}/{totalSize/1024} KB)";
             }
+
+            continue;
+            void DownloadSucceed()
+            {
+                currentSize += f.Size;
+
+                consecutiveError = 0;
+            }
+            
         }
         
     }
