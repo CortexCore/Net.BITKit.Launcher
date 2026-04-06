@@ -10,16 +10,19 @@ AnsiConsole.WriteLine("Net.BITKit.Launcher - 版本更新工具");
 
 Console.WriteLine("使用方式:");
 
+string exeName = Path.GetFileName(Process.GetCurrentProcess().MainModule!.FileName);
+
 var table = new Table();
 
 // 添加列
 table.AddColumn("命令");
 table.AddColumn("说明");
+table.AddColumn("备注");
 
 // 添加行
-table.AddRow("./Net.BITKit.Launcher.exe", "默认下载或更新");
-table.AddRow("./Net.BITKit.Launcher.exe generate", "生成清单");
-table.AddRow("./Net.BITKit.Launcher.exe generate <目录>", "生成指定目录的清单");
+table.AddRow($"./{exeName}", "默认下载或更新");
+table.AddRow($"./{exeName} generate", "生成清单","记得写入 BaseUrl 字段");
+table.AddRow($"./{exeName} generate <目录>", "生成指定目录的清单");
 
 // 输出表格
 AnsiConsole.Write(table);
@@ -254,7 +257,7 @@ async Task DownloadManifestFilesAsync(int maxConcurrency = 4)
     {
         var buffer = new byte[81920]; // 80 KB
         
-        string exeName = Path.GetFileName(Process.GetCurrentProcess().MainModule!.FileName);
+        
         
         var totalSize = files.Sum(f => f.Size);
         long currentSize = 0;
