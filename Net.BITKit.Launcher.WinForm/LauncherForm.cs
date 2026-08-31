@@ -102,6 +102,11 @@ internal sealed class LauncherForm : Form
     protected override void OnHandleCreated(EventArgs eventArgs)
     {
         base.OnHandleCreated(eventArgs);
+        if (Icon is not null)
+        {
+            SendMessage(Handle, 0x0080, new IntPtr(1), Icon.Handle);
+            SendMessage(Handle, 0x0080, IntPtr.Zero, Icon.Handle);
+        }
         if (!_gameHero || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
             return;
@@ -131,6 +136,8 @@ internal sealed class LauncherForm : Form
     {
         Text = "Net.BITKit.Launcher";
         Icon = TryLoadApplicationIcon();
+        ShowIcon = true;
+        ShowInTaskbar = true;
         ClientSize = new Size(1100, 620);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
@@ -983,6 +990,9 @@ internal sealed class LauncherForm : Form
 
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr window, int message, int wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr windowHandle, int message, IntPtr iconType, IntPtr iconHandle);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(

@@ -52,6 +52,8 @@ internal sealed class MiniInstallerForm : Form
     {
         Text = (_dryRun ? "[模拟] " : "") + $"安装 {_bootstrap.DisplayName}";
         Icon = TryLoadApplicationIcon();
+        ShowIcon = true;
+        ShowInTaskbar = true;
         ClientSize = new Size(760, 520);
         MinimumSize = MaximumSize = Size;
         StartPosition = FormStartPosition.CenterScreen;
