@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Net.BITKit.Launcher", "Net.BITKit.Launcher\Net.BITKit.Launcher.csproj", "{C5BA0548-8D0E-42DF-9574-B6F07518E03B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Net.BITKit.Launcher.WinForm", "Net.BITKit.Launcher.WinForm\Net.BITKit.Launcher.WinForm.csproj", "{A7C44D9A-601E-4A4E-9433-128429BDD03E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{C5BA0548-8D0E-42DF-9574-B6F07518E03B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5BA0548-8D0E-42DF-9574-B6F07518E03B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C5BA0548-8D0E-42DF-9574-B6F07518E03B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7C44D9A-601E-4A4E-9433-128429BDD03E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7C44D9A-601E-4A4E-9433-128429BDD03E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7C44D9A-601E-4A4E-9433-128429BDD03E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7C44D9A-601E-4A4E-9433-128429BDD03E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <UseWindowsForms>true</UseWindowsForms>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Net.BITKit.Launcher</AssemblyName>
+        <RootNamespace>Net.BITKit.Launcher.WinForm</RootNamespace>
+        <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+        <ApplicationIcon Condition="Exists('Assets\launcher.ico')">Assets\launcher.ico</ApplicationIcon>
+        <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+        <LauncherProductId Condition="'$(LauncherProductId)' == ''"></LauncherProductId>
+        <LauncherDisplayName Condition="'$(LauncherDisplayName)' == ''">BITKit Game</LauncherDisplayName>
+        <LauncherManifestUrl Condition="'$(LauncherManifestUrl)' == ''"></LauncherManifestUrl>
+        <LauncherInstallDirectory Condition="'$(LauncherInstallDirectory)' == ''">BITKit Game</LauncherInstallDirectory>
+        <LauncherGameDataDirectory Condition="'$(LauncherGameDataDirectory)' == ''"></LauncherGameDataDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Net.BITKit.Launcher\Net.BITKit.Launcher.csproj" />
+        <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\default-hero.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AssemblyMetadata Include="BITKit.ProductId" Value="$(LauncherProductId)" />
+        <AssemblyMetadata Include="BITKit.DisplayName" Value="$(LauncherDisplayName)" />
+        <AssemblyMetadata Include="BITKit.ManifestUrl" Value="$(LauncherManifestUrl)" />
+        <AssemblyMetadata Include="BITKit.InstallDirectory" Value="$(LauncherInstallDirectory)" />
+        <AssemblyMetadata Include="BITKit.GameDataDirectory" Value="$(LauncherGameDataDirectory)" />
+    </ItemGroup>
+
+</Project>
