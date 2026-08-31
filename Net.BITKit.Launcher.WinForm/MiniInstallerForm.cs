@@ -51,6 +51,7 @@ internal sealed class MiniInstallerForm : Form
     private void InitializeLayout()
     {
         Text = (_dryRun ? "[模拟] " : "") + $"安装 {_bootstrap.DisplayName}";
+        Icon = TryLoadApplicationIcon();
         ClientSize = new Size(760, 520);
         MinimumSize = MaximumSize = Size;
         StartPosition = FormStartPosition.CenterScreen;
@@ -642,6 +643,20 @@ internal sealed class MiniInstallerForm : Form
 
         using var image = Image.FromStream(stream);
         return new Bitmap(image);
+    }
+
+    private static Icon? TryLoadApplicationIcon()
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(Environment.ProcessPath)
+                ? Icon.ExtractAssociatedIcon(Environment.ProcessPath)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string FormatBytes(long bytes) => bytes switch

@@ -130,12 +130,27 @@ internal sealed class LauncherForm : Form
     private void InitializeWindow()
     {
         Text = "Net.BITKit.Launcher";
+        Icon = TryLoadApplicationIcon();
         ClientSize = new Size(1100, 620);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = false;
         BackColor = Color.FromArgb(5, 11, 26);
         Font = new Font("Segoe UI", 9.5F);
+    }
+
+    private static Icon? TryLoadApplicationIcon()
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(Environment.ProcessPath)
+                ? Icon.ExtractAssociatedIcon(Environment.ProcessPath)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void InitializeLayout()
