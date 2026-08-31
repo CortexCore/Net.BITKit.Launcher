@@ -9,7 +9,7 @@
         <AssemblyName>Net.BITKit.Launcher</AssemblyName>
         <RootNamespace>Net.BITKit.Launcher.WinForm</RootNamespace>
         <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-        <ApplicationIcon Condition="Exists('Assets\launcher.ico')">Assets\launcher.ico</ApplicationIcon>
+        <ApplicationIcon Condition="'$(ApplicationIcon)' == '' and Exists('Assets\launcher.ico')">Assets\launcher.ico</ApplicationIcon>
         <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
         <LauncherProductId Condition="'$(LauncherProductId)' == ''"></LauncherProductId>
         <LauncherDisplayName Condition="'$(LauncherDisplayName)' == ''">BITKit Game</LauncherDisplayName>
