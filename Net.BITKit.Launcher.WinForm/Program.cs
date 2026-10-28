@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Windows;
 using Net.BITKit.Launcher;
 
 namespace Net.BITKit.Launcher.WinForm;
@@ -6,16 +7,16 @@ namespace Net.BITKit.Launcher.WinForm;
 internal static class Program
 {
     [STAThread]
-    private static async Task<int> Main(string[] args)
+    private static int Main(string[] args)
     {
         if (args.FirstOrDefault() == SelfUpdater.ApplyCommand)
         {
-            return await SelfUpdater.ApplyAsync(args);
+            return SelfUpdater.ApplyAsync(args).GetAwaiter().GetResult();
         }
 
         if (args.FirstOrDefault() == SelfUpdater.CleanupCommand)
         {
-            return await SelfUpdater.CleanupAsync(args);
+            return SelfUpdater.CleanupAsync(args).GetAwaiter().GetResult();
         }
 
         var startup = ParseStartupArguments(args);
@@ -28,11 +29,10 @@ internal static class Program
                                 || string.Equals(startup.Arguments[0], "--install-dry-run", StringComparison.OrdinalIgnoreCase));
         if (startup.Arguments.Count > 0 && !previewMode && !firstInstall && !installDryRun)
         {
-            return await LauncherApplication.RunAsync(startup.Arguments.ToArray());
+            return LauncherApplication.RunAsync(startup.Arguments.ToArray()).GetAwaiter().GetResult();
         }
 
         ConsoleWindow.HideIfOwnedByCurrentProcess();
-        ApplicationConfiguration.Initialize();
         var workspace = Path.GetFullPath(Environment.CurrentDirectory);
         var bootstrap = BootstrapConfiguration.Load();
         var dataStore = new LauncherDataStore(startup.ConfigDirectory);
@@ -41,8 +41,8 @@ internal static class Program
             MessageBox.Show(
                 "此启动器没有内嵌安装配置，无法模拟安装。请使用专用发布版本。",
                 "Net.BITKit.Launcher",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return LauncherExitCodes.InvalidArguments;
         }
         using var instanceLock = SingleInstanceLock.TryAcquire(workspace);
@@ -51,54 +51,66 @@ internal static class Program
             MessageBox.Show(
                 "此目录中的启动器已经在运行。",
                 "Net.BITKit.Launcher",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return LauncherExitCodes.AlreadyRunning;
         }
 
-        if (!previewMode
-            && !firstInstall
-            && bootstrap is not null
-            && !File.Exists(Path.Combine(workspace, ManifestService.FileName)))
+        var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        try
         {
-            var existing = dataStore.Load(bootstrap.ProductId);
-            if (existing is not null
-                && File.Exists(existing.LauncherPath)
-                && !PathSafety.IsSamePath(existing.LauncherPath, Environment.ProcessPath ?? ""))
+            if (!previewMode
+                && !firstInstall
+                && bootstrap is not null
+                && !File.Exists(Path.Combine(workspace, ManifestService.FileName)))
             {
-                StartInstalledLauncher(existing.LauncherPath, existing.InstallPath, dataStore.Root, firstInstall: false);
+                var existing = dataStore.Load(bootstrap.ProductId);
+                if (existing is not null
+                    && File.Exists(existing.LauncherPath)
+                    && !PathSafety.IsSamePath(existing.LauncherPath, Environment.ProcessPath ?? ""))
+                {
+                    StartInstalledLauncher(existing.LauncherPath, existing.InstallPath, dataStore.Root, firstInstall: false);
+                    return LauncherExitCodes.Success;
+                }
+
+                var installer = new MainWindow(bootstrap, dataStore, installDryRun);
+                _ = installer.ShowDialog();
+                if (installDryRun && installer.SimulationCompleted)
+                {
+                    var simulationWindow = new MainWindow(
+                        workspace,
+                        simulationMode: true,
+                        simulationDisplayName: bootstrap.DisplayName);
+                    _ = simulationWindow.ShowDialog();
+                    return LauncherExitCodes.Success;
+                }
+
+                if (installer.DialogResult == true
+                    && installer.InstalledPath is not null
+                    && installer.InstalledLauncherPath is not null)
+                {
+                    StartInstalledLauncher(
+                        installer.InstalledLauncherPath,
+                        installer.InstalledPath,
+                        dataStore.Root,
+                        firstInstall: true);
+                }
+
                 return LauncherExitCodes.Success;
             }
 
-            using var installer = new MiniInstallerForm(bootstrap, dataStore, installDryRun);
-            Application.Run(installer);
-            if (installDryRun && installer.SimulationCompleted)
-            {
-                using var simulationForm = new LauncherForm(
-                    workspace,
-                    simulationMode: true,
-                    simulationDisplayName: bootstrap.DisplayName);
-                Application.Run(simulationForm);
-                return LauncherExitCodes.Success;
-            }
-
-            if (installer.DialogResult == DialogResult.OK
-                && installer.InstalledPath is not null
-                && installer.InstalledLauncherPath is not null)
-            {
-                StartInstalledLauncher(
-                    installer.InstalledLauncherPath,
-                    installer.InstalledPath,
-                    dataStore.Root,
-                    firstInstall: true);
-            }
-
-            return LauncherExitCodes.Success;
+            var window = new MainWindow(
+                workspace,
+                previewMode,
+                firstInstall,
+                simulationDisplayName: bootstrap?.DisplayName);
+            _ = window.ShowDialog();
+            return window.ExitCode;
         }
-
-        using var form = new LauncherForm(workspace, previewMode, firstInstall);
-        Application.Run(form);
-        return form.ExitCode;
+        finally
+        {
+            application.Shutdown();
+        }
     }
 
     private static void StartInstalledLauncher(

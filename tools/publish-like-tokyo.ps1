@@ -2,7 +2,8 @@
 param(
     [string]$GameRoot = 'D:\Iris\Documents\Workspace\Net.Like.Xue.Tokyo.V6',
     [string]$OssDestination = 'oss://like-game/Net.Like.Xue.Tokyo/App/',
-    [string]$PublicBaseUrl = 'https://like-game.oss-cn-shenzhen.aliyuncs.com/Net.Like.Xue.Tokyo/App',
+    [Alias('PublicBaseUrl')]
+    [string]$CdnBaseUrl = 'https://like-game.oss-accelerate.aliyuncs.com/Net.Like.Xue.Tokyo/App',
     [string]$OssUtilPath = $env:OSSUTIL_PATH,
     [string]$IconPng = 'D:\Iris\Documents\GitHub\Net.Like.Xue.Tokyo\Assets\Artists\Arts\Logos\logo.png',
     [string]$GameName = 'Net.Like.Xue.Tokyo.V6',
@@ -165,6 +166,7 @@ if (-not (Test-Path -LiteralPath $gameExecutablePath -PathType Leaf)) {
 Write-Host 'Like Tokyo OSS 专用发布' -ForegroundColor Yellow
 Write-Host "游戏目录：$resolvedGameRoot"
 Write-Host "OSS 目标：$OssDestination"
+Write-Host "CDN 下载：$($CdnBaseUrl.TrimEnd('/'))"
 Write-Host "ossutil：$resolvedOssUtil"
 Write-Host "模式：$(if ($DryRun) { '模拟，不写 OSS' } else { '正式发布' })"
 
@@ -185,11 +187,10 @@ else {
 $parent = Split-Path -Parent $resolvedGameRoot
 $stagingRoot = Join-Path $parent ('.bitkit-publish-' + [Guid]::NewGuid().ToString('N'))
 $launcherOutput = Join-Path $stagingRoot 'launcher'
-$payloadRoot = Join-Path $stagingRoot 'payload'
 $fileListPath = Join-Path $stagingRoot 'files.txt'
 $iconPath = Join-Path $stagingRoot 'launcher.ico'
 $remoteManifestCheck = Join-Path $stagingRoot 'manifest.remote.yaml'
-New-Item -ItemType Directory -Path $launcherOutput, $payloadRoot | Out-Null
+New-Item -ItemType Directory -Path $launcherOutput | Out-Null
 
 try {
     Write-Step '生成多尺寸 Windows 图标并发布单文件启动器'
@@ -203,7 +204,7 @@ try {
         "-p:ApplicationIcon=$iconPath",
         '-p:LauncherProductId=net.like-xue.like-tokyo',
         '-p:LauncherDisplayName=Like Tokyo',
-        "-p:LauncherManifestUrl=$($PublicBaseUrl.TrimEnd('/'))/manifest.yaml",
+        "-p:LauncherManifestUrl=$($CdnBaseUrl.TrimEnd('/'))/manifest.yaml",
         '-p:LauncherInstallDirectory=Net.Like.Xue.Tokyo',
         '-p:LauncherGameDataDirectory=%USERPROFILE%\AppData\LocalLow\LikeXue\LikeTokyo'
     )
@@ -235,7 +236,7 @@ try {
     $manifestText = [Text.RegularExpressions.Regex]::Replace(
         $manifestText,
         '(?m)^baseUrl:.*$',
-        "baseUrl: $($PublicBaseUrl.TrimEnd('/'))")
+        "baseUrl: $($CdnBaseUrl.TrimEnd('/'))")
     $manifestText = [Text.RegularExpressions.Regex]::Replace(
         $manifestText,
         '(?m)^launcher:.*$',
@@ -256,10 +257,9 @@ try {
         throw '发布文件列表为空。'
     }
 
-    Write-Step "按清单创建硬链接发布区（$($relativeFiles.Count) 个文件）"
+    Write-Step "按清单校验发布文件列表（$($relativeFiles.Count) 个文件）"
     $rootPrefix = $resolvedGameRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     [int64]$totalBytes = 0
-    $copiedFallbackCount = 0
     foreach ($relativeFile in $relativeFiles) {
         $normalized = $relativeFile.Replace('/', [IO.Path]::DirectorySeparatorChar)
         $sourcePath = [IO.Path]::GetFullPath((Join-Path $resolvedGameRoot $normalized))
@@ -271,27 +271,19 @@ try {
             throw "清单文件不存在：$relativeFile"
         }
 
-        $targetPath = Join-Path $payloadRoot $normalized
-        New-Item -ItemType Directory -Path (Split-Path -Parent $targetPath) -Force | Out-Null
-        try {
-            New-Item -ItemType HardLink -Path $targetPath -Target $sourcePath | Out-Null
-        }
-        catch {
-            Copy-Item -LiteralPath $sourcePath -Destination $targetPath
-            $copiedFallbackCount++
-        }
-
         $totalBytes += (Get-Item -LiteralPath $sourcePath).Length
     }
 
-    Write-Host ("发布内容：{0} 个文件，{1:N2} GiB；硬链接失败后复制：{2}" -f `
-            $relativeFiles.Count, ($totalBytes / 1GB), $copiedFallbackCount)
+    Write-Host ("发布内容：{0} 个文件，{1:N2} GiB；上传源由 files.txt 限定" -f `
+            $relativeFiles.Count, ($totalBytes / 1GB))
 
-    Write-Step '批量同步游戏文件（manifest.yaml 尚未发布）'
+    Write-Step '按 files.txt 批量同步游戏文件（manifest.yaml 尚未发布）'
     $syncArguments = @(
         'sync',
-        ($payloadRoot.TrimEnd('\') + '\'),
+        ($resolvedGameRoot.TrimEnd('\') + '\'),
         $OssDestination,
+        '--files-from-raw',
+        $fileListPath,
         '--checksum',
         '--force'
     )
@@ -322,7 +314,7 @@ try {
     else {
         $committed = $true
         Write-Step '从公网重新下载 manifest.yaml 并核对内容'
-        $verificationUrl = $PublicBaseUrl.TrimEnd('/') + '/' + $manifestName + '?publish=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $verificationUrl = $CdnBaseUrl.TrimEnd('/') + '/' + $manifestName + '?publish=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $webClient = [Net.WebClient]::new()
         try {
             $webClient.DownloadFile($verificationUrl, $remoteManifestCheck)
@@ -334,10 +326,10 @@ try {
         $localHash = (Get-FileHash -LiteralPath $gameManifestPath -Algorithm SHA256).Hash
         $remoteHash = (Get-FileHash -LiteralPath $remoteManifestCheck -Algorithm SHA256).Hash
         if ($localHash -ne $remoteHash) {
-            throw 'OSS 已提交新清单，但公网回读内容不一致。请检查缓存或 CDN 配置。'
+            throw 'OSS 已提交新清单，但 CDN 回读内容不一致。请检查 CDN 缓存规则或执行缓存刷新。'
         }
 
-        Write-Host "`n发布完成：$PublicBaseUrl/$manifestName" -ForegroundColor Green
+        Write-Host "`n发布完成：$($CdnBaseUrl.TrimEnd('/'))/$manifestName" -ForegroundColor Green
     }
 }
 finally {

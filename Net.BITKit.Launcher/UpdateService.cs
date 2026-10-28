@@ -51,15 +51,24 @@ public sealed class UpdateService
         }
 
         var localManifest = await _manifestService.LoadAsync(localManifestPath, cancellationToken);
-        var baseUri = ValidateBaseUri(localManifest.BaseUrl);
-        var manifestUri = new Uri(EnsureTrailingSlash(baseUri), ManifestService.FileName);
+        var manifestBaseUri = ValidateBaseUri(localManifest.BaseUrl);
+        var manifestUri = new Uri(EnsureTrailingSlash(manifestBaseUri), ManifestService.FileName);
         _log($"获取远端清单: {manifestUri}");
 
         using var response = await _httpClient.GetAsync(manifestUri, cancellationToken);
         response.EnsureSuccessStatusCode();
         var yaml = await response.Content.ReadAsStringAsync(cancellationToken);
         var remoteManifest = _manifestService.Deserialize(yaml);
-        remoteManifest.BaseUrl = localManifest.BaseUrl;
+        if (string.IsNullOrWhiteSpace(remoteManifest.BaseUrl))
+        {
+            remoteManifest.BaseUrl = localManifest.BaseUrl;
+        }
+
+        var downloadBaseUri = ValidateBaseUri(remoteManifest.BaseUrl);
+        if (downloadBaseUri != manifestBaseUri)
+        {
+            _log($"更新下载地址: {downloadBaseUri}");
+        }
 
         ValidateManifest(remoteManifest, root);
         remoteManifest.Files = remoteManifest.Files
@@ -95,7 +104,7 @@ public sealed class UpdateService
             currentExecutable,
             cancellationToken);
 
-        var plan = new UpdatePlan(localManifest, remoteManifest, baseUri, downloads, deletions, skipped);
+        var plan = new UpdatePlan(localManifest, remoteManifest, downloadBaseUri, downloads, deletions, skipped);
         Report(new UpdateProgress(
             UpdateStage.Ready,
             downloads.Count == 0 && deletions.Count == 0

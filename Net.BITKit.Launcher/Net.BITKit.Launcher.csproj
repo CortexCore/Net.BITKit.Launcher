@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AssemblyName>Net.BITKit.Launcher.Core</AssemblyName>
@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Compile Include="..\Src\Manifest.cs" Link="Manifest.cs" />
       <PackageReference Include="Ignore" Version="0.2.1" />
       <PackageReference Include="YamlDotNet" Version="18.1.0" />
     </ItemGroup>

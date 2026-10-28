@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 
+using System.IO;
+
 namespace Net.BITKit.Launcher.WinForm;
 
 internal sealed class SingleInstanceLock : IDisposable

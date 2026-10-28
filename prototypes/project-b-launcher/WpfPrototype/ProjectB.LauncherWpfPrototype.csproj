@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ProjectB.LauncherWpfPrototype</AssemblyName>
+    <RootNamespace>ProjectB.LauncherWpfPrototype</RootNamespace>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != ''">true</IncludeNativeLibrariesForSelfExtract>
+    <PrototypeHero Condition="Exists('..\..\..\..\Com.Project.B.Unity\Assets\Artists\Arts\Screenshots\Sarovsk_Custom..._09.02.2024_04-02-00.png')">..\..\..\..\Com.Project.B.Unity\Assets\Artists\Arts\Screenshots\Sarovsk_Custom..._09.02.2024_04-02-00.png</PrototypeHero>
+    <PrototypeHero Condition="'$(PrototypeHero)' == ''">..\..\..\Net.BITKit.Launcher.WinForm\Assets\default-hero.png</PrototypeHero>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="$(PrototypeHero)" Link="Assets\hero.png" />
+  </ItemGroup>
+
+</Project>

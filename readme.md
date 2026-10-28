@@ -1,6 +1,9 @@
 # Net.BITKit.Launcher
 
-一个基于 .NET 8 的文件清单更新器。启动器从远端取得 `manifest.yaml`，比较本地文件哈希，只下载发生变化的文件，更新完成后启动目标应用。
+一个基于 .NET 10 的文件清单更新器。启动器从远端取得 `manifest.yaml`，比较本地文件哈希，只下载发生变化的文件，更新完成后启动目标应用。
+
+> [!NOTE]
+> Windows 正式发布采用百余 MiB 的 `win-x64` 自包含单文件，目标机器无需预装 .NET 10。自动下载 Runtime 的轻量外壳方案已经放弃并从代码中移除；历史结论见 [`docs/runtime-bootstrap-abandoned.md`](docs/runtime-bootstrap-abandoned.md)。正式界面使用原生 WPF，不依赖 WebView2 Runtime。
 
 ## 命令
 
@@ -33,7 +36,7 @@
 ./Net.BITKit.Launcher.exe generate <目录> --file-list files.txt
 ```
 
-帮助命令同时支持 `--help`、`-help`、`-h`、`/?` 和 `help`。`update` 可简写为 `up`，`generate` 可简写为 `gen` 或 `g`，交互菜单 `menu` 可写成 `cli`。无参数运行打开 WinForms 界面；传入任何更新参数时走 CLI，便于脚本调用。
+帮助命令同时支持 `--help`、`-help`、`-h`、`/?` 和 `help`。`update` 可简写为 `up`，`generate` 可简写为 `gen` 或 `g`，交互菜单 `menu` 可写成 `cli`。无参数运行打开 WPF 界面；传入任何更新参数时走 CLI，便于脚本调用。
 
 ## manifest.yaml
 
@@ -54,7 +57,7 @@ ui:
   buttonText: 启动游戏
 ```
 
-- `baseUrl`：静态文件服务器目录。启动器会从该目录读取 `manifest.yaml` 和文件。
+- `baseUrl`：客户端下载目录，生产环境建议填写 CDN 加速域名。启动器先从本地清单记录的地址读取新清单，再按新清单的 `baseUrl` 下载文件并保存该地址，因此可通过一次发布把已有客户端从 OSS 源站迁移到 CDN。
 - `launcher`：更新完成后启动的相对路径，不能越出应用目录。
 - `gameArguments`：可选的游戏启动参数字符串。
 - `gameEnvironment`：可选的游戏进程环境变量映射；变量值中的 `%VAR%` 会在启动前展开。
@@ -75,13 +78,17 @@ ui:
 
 ```powershell
 # 推荐先跑：完整计算与 OSS 差异预览，不修改游戏目录和 OSS
-powershell -ExecutionPolicy Bypass -File tools/publish-like-tokyo.ps1 -DryRun
+powershell -ExecutionPolicy Bypass -File tools/publish-like-tokyo.ps1 -DryRun `
+  -CdnBaseUrl 'https://like-game.oss-accelerate.aliyuncs.com/Net.Like.Xue.Tokyo/App'
 
 # 正式发布；脚本会要求手动输入 PUBLISH
-powershell -ExecutionPolicy Bypass -File tools/publish-like-tokyo.ps1
+powershell -ExecutionPolicy Bypass -File tools/publish-like-tokyo.ps1 `
+  -CdnBaseUrl 'https://like-game.oss-accelerate.aliyuncs.com/Net.Like.Xue.Tokyo/App'
 ```
 
-脚本会把 PNG 转换为包含 16 到 256 像素图层的 ICO，构建带专用图标的单文件启动器，生成 SHA-256 清单，并按清单建立 NTFS 硬链接发布区。随后只启动一次 `ossutil sync --checksum` 批量同步资源，全部成功后才单独上传 `manifest.yaml`，避免客户端下载到尚未完整上传的新版本。
+脚本会把 PNG 转换为包含 16 到 256 像素图层的 ICO，构建带专用图标的单文件启动器，生成 SHA-256 清单和 `files.txt` 发布列表。上传时不会让 `ossutil` 直接递归扫描整个游戏目录，而是使用 `ossutil sync --files-from-raw files.txt` 只同步清单列出的文件，避免 `.gitignore` 排除内容、缓存或临时文件被一起上传。`OssDestination` 只用于 `ossutil` 直传源 OSS，`CdnBaseUrl` 会写入启动器和清单，客户端只从 CDN 获取清单及更新文件。资源全部上传成功后才单独上传 `manifest.yaml`，避免客户端下载到尚未完整上传的新版本。
+
+CDN 需把 OSS Bucket 配置为源站，并保持 `/Net.Like.Xue.Tokyo/App/` 路径映射一致。应为 `manifest.yaml` 配置不缓存或极短 TTL；覆盖同名资源时还需刷新对应 CDN URL，避免新清单命中旧文件。脚本发布后会从 `CdnBaseUrl` 回读清单，缓存未刷新时会直接报错。
 
 脚本不会使用 `--delete`：旧的无引用对象留在 OSS 不影响客户端，也避免误删和发布窗口中断。确认发布稳定后，可另做受控的远端垃圾清理，不应把删除混进常规发布。
 
@@ -130,14 +137,16 @@ Windows 不允许普通程序删除或覆盖仍在运行、仍被内存映射的
 3. 主进程退出后，辅助进程替换正式启动器并启动新版。
 4. 新版删除临时辅助目录和回滚文件，再启动目标应用。
 
-因此安装目录不需要长期保留两个轮换的 EXE。发布 Windows 版本时建议使用单文件模式：
+因此安装目录不需要长期保留两个轮换的 EXE。发布 Windows 版本时使用 .NET 10 自包含单文件：
 
 ```powershell
 dotnet publish Net.BITKit.Launcher.WinForm/Net.BITKit.Launcher.WinForm.csproj `
-  -c Release -r win-x64 --self-contained true
+  -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-项目在指定 `RuntimeIdentifier` 时默认启用 `PublishSingleFile`。
+Project B 的完整快照、差异预览和自建服务器发布由 `tools/publish-project-b-self-hosted.ps1` 完成。它生成同样的自包含单文件，不包含 Runtime 下载外壳。
 
 ## 替换 EXE 图标
 
@@ -152,4 +161,4 @@ Net.BITKit.Launcher.WinForm/Assets/launcher.ico
 ## 项目结构
 
 - `Net.BITKit.Launcher`：与界面无关的清单、下载、事务替换和自更新核心库。
-- `Net.BITKit.Launcher.WinForm`：生成最终 `Net.BITKit.Launcher.exe`，同时提供 GUI 与 CLI。
+- `Net.BITKit.Launcher.WinForm`：生成自包含单文件启动器，同时提供 GUI 与 CLI。

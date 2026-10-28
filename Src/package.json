@@ -1,0 +1,16 @@
+{
+  "name": "net.bitkit.launcher",
+  "version": "1.0.0",
+  "displayName": "BITKit Launcher",
+  "description": "Unity package entry point for Net.BITKit.Launcher, a manifest-based differential updater and launcher.",
+  "documentationUrl": "https://github.com/CortexCore/Net.BITKit.Launcher#readme",
+  "keywords": [
+    "launcher",
+    "updater",
+    "manifest"
+  ],
+  "author": {
+    "name": "CortexCore",
+    "url": "https://github.com/CortexCore"
+  }
+}

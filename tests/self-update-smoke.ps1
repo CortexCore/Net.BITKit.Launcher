@@ -31,16 +31,29 @@ function Get-FreeTcpPort {
     }
 }
 
+function Publish-Launcher([string]$Output, [string]$Version) {
+    dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained true `
+        -o $Output -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+        "-p:Version=$Version" "-p:AssemblyVersion=$($Version).0"
+    Assert-True ($LASTEXITCODE -eq 0) "Publishing launcher $Version failed."
+}
+
+function Invoke-Launcher([string]$Executable, [string[]]$Arguments) {
+    $process = Start-Process -FilePath $Executable -ArgumentList $Arguments `
+        -WorkingDirectory (Get-Location).Path -PassThru -Wait
+    try {
+        return $process.ExitCode
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path $oldPublish, $newPublish, $installRoot, $serverRoot | Out-Null
 
-    dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained true `
-        -o $oldPublish -p:Version=1.0.0 -p:AssemblyVersion=1.0.0.0
-    Assert-True ($LASTEXITCODE -eq 0) 'Publishing the old launcher failed.'
-
-    dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained true `
-        -o $newPublish -p:Version=2.0.0 -p:AssemblyVersion=2.0.0.0
-    Assert-True ($LASTEXITCODE -eq 0) 'Publishing the new launcher failed.'
+    Publish-Launcher $oldPublish '1.0.0'
+    Publish-Launcher $newPublish '2.0.0'
 
     $executableName = 'Net.BITKit.Launcher.exe'
     $oldExecutable = Join-Path $oldPublish $executableName
@@ -56,8 +69,8 @@ try {
     $newHash = (Get-FileHash -LiteralPath $newExecutable -Algorithm SHA256).Hash
     Assert-True ($oldHash -ne $newHash) 'The two test builds are identical.'
 
-    & $servedExecutable generate $serverRoot
-    Assert-True ($LASTEXITCODE -eq 0) 'Generating the remote manifest failed.'
+    $exitCode = Invoke-Launcher $servedExecutable @('generate', $serverRoot)
+    Assert-True ($exitCode -eq 0) 'Generating the remote manifest failed.'
     $remoteManifestPath = Join-Path $serverRoot 'manifest.yaml'
     $remoteYaml = [IO.File]::ReadAllText($remoteManifestPath)
     Assert-True (-not ($remoteYaml -match '(?m)^\s*path:\s*manifest\.yaml\s*$')) `
@@ -126,10 +139,10 @@ try {
             $guiProcess.Refresh()
         } while (-not $guiProcess.HasExited -and $guiProcess.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $windowDeadline)
         Assert-True (-not $guiProcess.HasExited -and $guiProcess.MainWindowHandle -ne 0) `
-            'The WinForms launcher did not open a window.'
+            'The WPF launcher did not open a window.'
 
-        & $installedExecutable update --dry-run --no-launch
-        Assert-True ($LASTEXITCODE -eq 10) 'A second launcher instance was not rejected.'
+        $exitCode = Invoke-Launcher $installedExecutable @('update', '--dry-run', '--no-launch')
+        Assert-True ($exitCode -eq 10) 'A second launcher instance was not rejected.'
 
         [void]$guiProcess.CloseMainWindow()
         if (-not $guiProcess.WaitForExit(5000)) {
@@ -142,15 +155,15 @@ try {
         $pathPattern = [Regex]::new([Regex]::Escape($executableName))
         $maliciousYaml = $pathPattern.Replace($remoteYaml, '../escape.exe', 1)
         [IO.File]::WriteAllText($remoteManifestPath, $maliciousYaml, [Text.UTF8Encoding]::new($false))
-        & $installedExecutable --simulate --no-launch
-        Assert-True ($LASTEXITCODE -ne 0) 'A path traversal manifest was accepted.'
+        $exitCode = Invoke-Launcher $installedExecutable @('--simulate', '--no-launch')
+        Assert-True ($exitCode -ne 0) 'A path traversal manifest was accepted.'
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $testRoot 'escape.exe'))) `
             'A path traversal manifest wrote outside the install directory.'
         [IO.File]::WriteAllText($remoteManifestPath, $remoteYaml, [Text.UTF8Encoding]::new($false))
 
         $beforeSimulationHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
-        & $installedExecutable update --dry-run --no-launch
-        Assert-True ($LASTEXITCODE -eq 0) 'The dry-run failed.'
+        $exitCode = Invoke-Launcher $installedExecutable @('update', '--dry-run', '--no-launch')
+        Assert-True ($exitCode -eq 0) 'The dry-run failed.'
         $afterSimulationHash = (Get-FileHash -LiteralPath $installedExecutable -Algorithm SHA256).Hash
         Assert-True ($beforeSimulationHash -eq $afterSimulationHash) 'The dry-run modified the launcher.'
 
@@ -161,15 +174,15 @@ try {
             [IO.FileAccess]::Read,
             [IO.FileShare]::Read)
         try {
-            & $installedExecutable update --no-launch
-            Assert-True ($LASTEXITCODE -eq 11) 'A process using a changed file was not reported.'
+            $exitCode = Invoke-Launcher $installedExecutable @('update', '--no-launch')
+            Assert-True ($exitCode -eq 11) 'A process using a changed file was not reported.'
         }
         finally {
             $lockedStream.Dispose()
         }
 
-        & $installedExecutable --no-launch
-        Assert-True ($LASTEXITCODE -eq 0) 'The launcher failed to schedule its self-update.'
+        $exitCode = Invoke-Launcher $installedExecutable @('--no-launch')
+        Assert-True ($exitCode -eq 0) 'The launcher failed to schedule its self-update.'
     }
     finally {
         Pop-Location

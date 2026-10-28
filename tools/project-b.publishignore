@@ -1,0 +1,25 @@
+# Project B development workspace files
+/.idea/
+/.run/
+/.unidot/
+/.vscode/
+/Src/
+/Project B_BurstDebugInformation_DoNotShip/
+
+# Local publishing state and helpers
+/.publish/
+/publish-app.ps1
+/publish-app.cmd
+/Net.BITKit.Launcher.pdb
+/Net.BITKit.Launcher.Core.pdb
+
+# Unidot and local launch configuration
+/Project B.Unidot.sln
+/Start-HostClient-build.cmd
+/Start-HostClient.build.json
+/Start-HostClient.cmd
+/Start-HostClient.ps1
+/unidot-gamemode.json
+/unidot.json
+/AGENTS.md
+/desktop.ini

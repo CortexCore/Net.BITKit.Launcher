@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project B Launcher Concept</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="stage">
+    <section class="launcher" aria-label="Project B 启动器视觉原型">
+      <div class="scene" aria-hidden="true"></div>
+      <div class="scene-grade" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+
+      <header class="window-bar">
+        <div class="brand-mark">
+          <img src="file:///D:/Iris/Documents/GitHub/Com.Project.B.Unity/Assets/Artists/Arts/Icons/Logo.png" alt="">
+        </div>
+        <div class="window-title">
+          <strong>PROJECT B</strong>
+          <span>FIELD OPERATIONS LAUNCHER</span>
+        </div>
+        <nav class="phase-nav" aria-label="演示状态">
+          <button class="phase is-active" data-state="install"><b>01</b><span>部署</span></button>
+          <button class="phase" data-state="download"><b>02</b><span>同步</span></button>
+          <button class="phase" data-state="ready"><b>03</b><span>就绪</span></button>
+        </nav>
+        <div class="window-actions" aria-hidden="true">
+          <button>—</button><button>×</button>
+        </div>
+      </header>
+
+      <aside class="side-rail" aria-hidden="true">
+        <span>ATLAS / BITKIT</span>
+        <i></i>
+        <em>BUILD 26.10</em>
+      </aside>
+
+      <section class="content">
+        <div class="eyebrow"><span></span> SECURE DEPLOYMENT CHANNEL / CN-01</div>
+
+        <div class="screen is-active" data-screen="install">
+          <div class="hero-copy">
+            <p class="chapter">INITIAL DEPLOYMENT</p>
+            <h1>部署你的<br><em>作战终端</em></h1>
+            <p class="lede">安装完整游戏资源，并为后续增量更新建立本地校验索引。</p>
+          </div>
+
+          <div class="install-panel">
+            <label>安装位置 <span>INSTALL LOCATION</span></label>
+            <div class="path-row">
+              <code>C:\Games\Project B</code>
+              <button class="ghost">更改</button>
+            </div>
+            <div class="capacity">
+              <div><span>下载大小</span><strong>1.55 GB</strong></div>
+              <div><span>所需空间</span><strong>3.20 GB</strong></div>
+              <div><span>校验方式</span><strong>SHA-256</strong></div>
+            </div>
+            <label class="check"><input type="checkbox" checked><i></i> 创建桌面快捷方式</label>
+            <button class="primary" data-action="install"><span>开始部署</span><small>INSTALL GAME</small></button>
+          </div>
+        </div>
+
+        <div class="screen" data-screen="download">
+          <div class="hero-copy compact">
+            <p class="chapter">RESOURCE SYNCHRONIZATION</p>
+            <h1>正在建立<br><em>前线资源</em></h1>
+            <p class="lede">所有文件在进入游戏目录前均经过完整性验证。</p>
+          </div>
+
+          <div class="sync-panel">
+            <div class="progress-heading">
+              <div><span>同步进度</span><strong id="progressValue">38%</strong></div>
+              <p><b id="downloaded">602 MB</b> / 1.55 GB</p>
+            </div>
+            <div class="progress-track"><i id="progressBar"></i><span></span></div>
+            <div class="transfer-grid">
+              <div><span>当前文件</span><code id="currentFile">Project B_Data/resources.assets</code></div>
+              <div><span>下载速度</span><strong id="speed">18.4 MB/s</strong></div>
+              <div><span>预计剩余</span><strong id="eta">00:53</strong></div>
+            </div>
+            <div class="sync-actions">
+              <button class="ghost" data-action="pause">暂停</button>
+              <button class="text-button" data-action="ready">跳到完成状态 →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen" data-screen="ready">
+          <div class="hero-copy ready-copy">
+            <p class="chapter">OPERATION READY</p>
+            <h1>区域已开放<br><em>等待进入</em></h1>
+            <p class="lede">本地资源完整，当前版本与远端部署清单一致。</p>
+          </div>
+
+          <div class="ready-panel">
+            <div class="status-seal">
+              <span></span>
+              <div><small>SYSTEM STATUS</small><strong>全部系统就绪</strong></div>
+            </div>
+            <button class="launch-button" data-action="launch">
+              <span>开始行动</span>
+              <small>LAUNCH PROJECT B</small>
+              <i>↗</i>
+            </button>
+            <div class="ready-meta">
+              <span>版本 <b>2026.10.11</b></span>
+              <span>延迟 <b>24 ms</b></span>
+              <span>区域 <b>CN-01</b></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="mission-strip">
+        <div class="signal"><i></i><span>更新服务在线</span></div>
+        <p><b>行动简报</b> 萨罗夫斯克封锁区已开放，新的资源点与撤离路线已部署。</p>
+        <div class="footer-links"><button>公告</button><button>设置</button><button>文件校验</button></div>
+      </footer>
+
+      <div class="toast" role="status">视觉演示：不会启动或安装任何内容</div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

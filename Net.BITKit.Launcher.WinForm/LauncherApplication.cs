@@ -49,6 +49,23 @@ internal static class LauncherApplication
 
                 AnsiConsole.MarkupLine($"生成清单: [blue]{Markup.Escape(root)}[/]");
                 var manifest = await manifestService.GenerateAsync(root, cancellationToken: cancellation.Token);
+                if (!string.IsNullOrWhiteSpace(options.Name))
+                {
+                    manifest.Name = options.Name;
+                }
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    manifest.BaseUrl = options.BaseUrl.TrimEnd('/');
+                }
+                if (!string.IsNullOrWhiteSpace(options.Launcher))
+                {
+                    manifest.Launcher = options.Launcher;
+                }
+
+                await manifestService.WriteAtomicAsync(
+                    Path.Combine(root, ManifestService.FileName),
+                    manifest,
+                    cancellation.Token);
                 if (!string.IsNullOrWhiteSpace(options.FileList))
                 {
                     var fileListPath = Path.GetFullPath(options.FileList);
@@ -59,6 +76,39 @@ internal static class LauncherApplication
                         new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                         cancellation.Token);
                     AnsiConsole.MarkupLine($"发布文件列表: [blue]{Markup.Escape(fileListPath)}[/]");
+                }
+
+                Manifest? previousManifest = null;
+                if (!string.IsNullOrWhiteSpace(options.PreviousManifest))
+                {
+                    var previousManifestPath = Path.GetFullPath(options.PreviousManifest);
+                    previousManifest = await manifestService.LoadAsync(previousManifestPath, cancellation.Token);
+                }
+
+                var diff = ManifestDiffService.Compare(
+                    manifest,
+                    previousManifest,
+                    options.PreviousRoot,
+                    options.ForceAll);
+                if (!string.IsNullOrWhiteSpace(options.ChangedFileList))
+                {
+                    var changedFileListPath = Path.GetFullPath(options.ChangedFileList);
+                    Directory.CreateDirectory(Path.GetDirectoryName(changedFileListPath)!);
+                    await File.WriteAllLinesAsync(
+                        changedFileListPath,
+                        diff.Uploads.Select(change => change.Entry.Path),
+                        new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                        cancellation.Token);
+                    AnsiConsole.MarkupLine($"待上传文件列表: [blue]{Markup.Escape(changedFileListPath)}[/]");
+                }
+
+                if (options.Preview)
+                {
+                    AnsiConsole.WriteLine();
+                    foreach (var line in ManifestDiffService.CreatePreview(diff))
+                    {
+                        AnsiConsole.WriteLine(line);
+                    }
                 }
 
                 AnsiConsole.MarkupLine($"[green]清单生成完成[/]，共 {manifest.Files.Count} 个文件，算法 {manifest.HashAlgorithm}。");
@@ -191,6 +241,30 @@ internal static class LauncherApplication
                 case "--file-list" when index + 1 < args.Length:
                     options.FileList = args[++index];
                     break;
+                case "--changed-file-list" when index + 1 < args.Length:
+                    options.ChangedFileList = args[++index];
+                    break;
+                case "--previous-manifest" when index + 1 < args.Length:
+                    options.PreviousManifest = args[++index];
+                    break;
+                case "--previous-root" when index + 1 < args.Length:
+                    options.PreviousRoot = args[++index];
+                    break;
+                case "--preview":
+                    options.Preview = true;
+                    break;
+                case "--name" when index + 1 < args.Length:
+                    options.Name = args[++index];
+                    break;
+                case "--base-url" when index + 1 < args.Length:
+                    options.BaseUrl = args[++index];
+                    break;
+                case "--launcher" when index + 1 < args.Length:
+                    options.Launcher = args[++index];
+                    break;
+                case "--force-all":
+                    options.ForceAll = true;
+                    break;
                 default:
                     if (argument.StartsWith("--concurrency=", StringComparison.OrdinalIgnoreCase))
                     {
@@ -218,9 +292,15 @@ internal static class LauncherApplication
             throw new ArgumentException("generate 命令不支持 --dry-run。");
         }
 
-        if (!options.Generate && !string.IsNullOrWhiteSpace(options.FileList))
+        if (!options.Generate && options.HasGenerateOutputOptions)
         {
-            throw new ArgumentException("--file-list 只能与 generate 命令一起使用。");
+            throw new ArgumentException("清单生成参数只能与 generate 命令一起使用。");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.PreviousRoot)
+            && string.IsNullOrWhiteSpace(options.PreviousManifest))
+        {
+            throw new ArgumentException("--previous-root 必须与 --previous-manifest 一起使用。");
         }
 
         return options;
@@ -260,6 +340,11 @@ internal static class LauncherApplication
         table.AddRow("launcher --concurrency 4", "设置并发下载数（1-32）");
         table.AddRow(Markup.Escape("launcher generate [目录]"), "生成 SHA-256 清单（别名 gen、g）");
         table.AddRow("launcher generate --file-list FILE", "生成清单并输出发布文件列表");
+        table.AddRow("launcher generate --previous-manifest FILE", "与上一版清单比较");
+        table.AddRow("launcher generate --previous-root DIR", "检查上一版服务器文件是否存在");
+        table.AddRow("launcher generate --preview", "在终端输出待上传文件树和摘要");
+        table.AddRow("launcher generate --changed-file-list FILE", "输出待上传文件列表");
+        table.AddRow("launcher generate --force-all", "将全部文件列为待上传");
         table.AddRow("launcher menu", "打开终端交互菜单（别名 cli）");
         table.AddRow("launcher --ui-preview", "打开离线界面预览（禁用更新与启动）");
         table.AddRow("launcher --simulate-install", "模拟安装检查，不写文件、不创建快捷方式");
@@ -295,9 +380,28 @@ internal static class LauncherApplication
         public bool Generate { get; init; }
         public string? Directory { get; set; }
         public string? FileList { get; set; }
+        public string? ChangedFileList { get; set; }
+        public string? PreviousManifest { get; set; }
+        public string? PreviousRoot { get; set; }
+        public bool Preview { get; set; }
+        public string? Name { get; set; }
+        public string? BaseUrl { get; set; }
+        public string? Launcher { get; set; }
+        public bool ForceAll { get; set; }
         public bool DryRun { get; set; }
         public bool LaunchAfterUpdate { get; set; } = true;
         public int MaxConcurrency { get; set; } = 4;
         public bool ShowHelp { get; init; }
+
+        public bool HasGenerateOutputOptions =>
+            !string.IsNullOrWhiteSpace(FileList)
+            || !string.IsNullOrWhiteSpace(ChangedFileList)
+            || !string.IsNullOrWhiteSpace(PreviousManifest)
+            || !string.IsNullOrWhiteSpace(PreviousRoot)
+            || Preview
+            || !string.IsNullOrWhiteSpace(Name)
+            || !string.IsNullOrWhiteSpace(BaseUrl)
+            || !string.IsNullOrWhiteSpace(Launcher)
+            || ForceAll;
     }
 }
